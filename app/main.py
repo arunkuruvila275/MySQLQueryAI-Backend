@@ -1,8 +1,8 @@
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import create_engine, text
 import openai
 import os
 from .database import SessionLocal, engine, Base
@@ -30,6 +30,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+class ConnectionDetails(BaseModel):
+    username: str
+    password: str
+    hostname: str
+    database: str
+
 class QueryRequest(BaseModel):
     natural_language_query: str
 
@@ -39,6 +45,18 @@ def get_db():
         yield db
     finally:
         db.close()
+
+@app.post("/connect/")
+async def connect(connection_details: ConnectionDetails):
+    try:
+        # Test the database connection
+        db_url = f"mysql+pymysql://{connection_details.username}:{connection_details.password}@{connection_details.hostname}/{connection_details.database}"
+        engine = create_engine(db_url)
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        return {"message": "Connection successful"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Connection failed: {str(e)}")
 
 @app.get("/")
 async def read_root():
@@ -61,8 +79,11 @@ async def translate_query(request: QueryRequest, db: Session = Depends(get_db)):
     # Debugging: Print the generated SQL query
     print("Generated SQL Query:", sql_query)
 
-    result = db.execute(text(sql_query)).fetchall()
-     
-    # Convert result to a list of dictionaries
-    result_dict = [dict(row._mapping) for row in result]
+    try:
+        result = db.execute(text(sql_query)).fetchall()
+        # Convert result to a list of dictionaries
+        result_dict = [dict(row._mapping) for row in result]
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Query execution failed: {str(e)}")
+
     return {"sql_query": sql_query, "result": result_dict}
