@@ -49,6 +49,9 @@ class SqlExecuteRequest(BaseModel):
     sql_query: str
     connection_details: ConnectionDetails
 
+class SqlExplainRequest(BaseModel):
+    sql_query: str
+
 # Global storage for table metadata
 table_metadata = {}
 
@@ -141,3 +144,28 @@ async def execute_query(request: SqlExecuteRequest):
         raise HTTPException(status_code=400, detail=f"Query execution failed: {str(e)}")
 
     return {"result": result_dict}
+
+@app.post("/explain_query/")
+async def explain_query(request: SqlExplainRequest):
+    logger.info("Received explain_query request")
+
+    # Include table metadata in the prompt
+    metadata_prompt = ""
+    for table_name, create_table_query in table_metadata.items():
+        metadata_prompt += f"Table {table_name} structure:\n{create_table_query}\n\n"
+
+    # Craft a prompt that instructs the model to return only the SQL query
+    prompt = f"{metadata_prompt} Using the above metadata of all available tables, convert the following MySQL query to natural language. Make it simple and breif :\n\n{request.sql_query}" 
+    
+    logger.info("Sending prompt to OpenAI")
+
+    response = openai.chat.completions.create(
+        model="gpt-4-turbo",
+        messages=[
+            {"role": "system", "content": "You are an expert in explaining and translating a MySQL query to natural language."},
+            {"role": "user", "content": prompt}
+        ]
+        )
+    explanation = response.choices[0].message.content.strip()
+
+    return {"explanation": explanation}
