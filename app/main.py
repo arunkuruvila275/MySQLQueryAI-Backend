@@ -45,6 +45,10 @@ class QueryRequest(BaseModel):
     natural_language_query: str
     connection_details: ConnectionDetails
 
+class SqlExecuteRequest(BaseModel):
+    sql_query: str
+    connection_details: ConnectionDetails
+
 # Global storage for table metadata
 table_metadata = {}
 
@@ -90,12 +94,6 @@ async def read_root():
 async def translate_query(request: QueryRequest):
     logger.info("Received translate_query request")
 
-    # Create the database connection
-    db_url = get_db_url(request.connection_details)
-    engine = create_engine(db_url)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    db = SessionLocal()
-
     # Include table metadata in the prompt
     metadata_prompt = ""
     for table_name, create_table_query in table_metadata.items():
@@ -116,19 +114,30 @@ async def translate_query(request: QueryRequest):
     sql_query = response.choices[0].message.content.strip()
     sql_query = sql_query.replace('```sql', '').replace('```', '').strip()
 
-    logger.info(f"Generated SQL Query Full: {sql_query}")
-
-    # Extract the last line of the SQL query
-    #sql_query_last_line = sql_query.split('\n')[-1].strip()
-
     # Debugging: Print the generated SQL query
     logger.info(f"Generated SQL Query: {sql_query}")
 
+    return {"sql_query": sql_query}
+
+@app.post("/execute_query/")
+async def execute_query(request: SqlExecuteRequest):
+    logger.info("Received execute_query request")
+
+    # Create the database connection
+    db_url = get_db_url(request.connection_details)
+    engine = create_engine(db_url)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    db = SessionLocal()
+
+    # Execute the provided SQL query
+    sql_query = request.sql_query.strip()
     try:
         result = db.execute(text(sql_query)).fetchall()
+
         # Convert result to a list of dictionaries
         result_dict = [dict(row._mapping) for row in result]
     except Exception as e:
+        logger.error(f"Query execution failed: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Query execution failed: {str(e)}")
 
-    return {"sql_query": sql_query, "result": result_dict}
+    return {"result": result_dict}
