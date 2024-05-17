@@ -9,7 +9,7 @@ import os
 from .database import SessionLocal, engine, Base
 from .models import Base
 
-# Configure logging
+# Configure logging1
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -75,16 +75,6 @@ async def connect(connection_details: ConnectionDetails):
         global table_metadata
         table_metadata = fetch_table_metadata(db)
 
-        # Send metadata to OpenAI to inform the model about the database structure
-        # openai.api_key = os.getenv('OPENAI_API_KEY')
-        # for table_name, create_table_query in metadata.items():
-        #    openai.completions.create(
-        #        model="gpt-3.5-turbo-instruct",
-        #        prompt=f"Here is the structure of the table {table_name}:\n\n{create_table_query}",
-        #        max_tokens=150,
-        #        temperature=0
-        #    )
-
         return {"message": "Connection successful"}
     except Exception as e:
         logger.error(f"Connection failed: {str(e)}")
@@ -112,30 +102,33 @@ async def translate_query(request: QueryRequest):
         metadata_prompt += f"Table {table_name} structure:\n{create_table_query}\n\n"
 
     # Craft a prompt that instructs the model to return only the SQL query
-    prompt = f"{metadata_prompt}Convert the following natural language query to a SQL query. Only return the SQL query, no other text:\n\n{request.natural_language_query}" 
+    prompt = f"{metadata_prompt} Using the above metadata of all available tables, convert the following natural language query to a SQL query. Always make sure to use the correct table names and the feild names. Only return the SQL query, no other text:\n\n{request.natural_language_query}" 
     
     logger.info("Sending prompt to OpenAI")
-    logger.debug(f"Prompt: {prompt}")
 
-    response = openai.completions.create(
-        model="gpt-3.5-turbo-instruct",
-        prompt=prompt,
-        max_tokens=150,
-        temperature=0   # Setting temperature to 0 for more deterministic responses
-    )
-    sql_query = response.choices[0].text.strip()
+    response = openai.chat.completions.create(
+        model="gpt-4-turbo",
+        messages=[
+            {"role": "system", "content": "You are a MySQL database admin expert, skilled in writing complex performance efficent queries using all the avaliable table metadata."},
+            {"role": "user", "content": prompt}
+        ]
+        )
+    sql_query = response.choices[0].message.content.strip()
+    sql_query = sql_query.replace('```sql', '').replace('```', '').strip()
+
+    logger.info(f"Generated SQL Query Full: {sql_query}")
 
     # Extract the last line of the SQL query
-    sql_query_last_line = sql_query.split('\n')[-1].strip()
+    #sql_query_last_line = sql_query.split('\n')[-1].strip()
 
     # Debugging: Print the generated SQL query
-    logger.info(f"Generated SQL Query: {sql_query_last_line}")
+    logger.info(f"Generated SQL Query: {sql_query}")
 
     try:
-        result = db.execute(text(sql_query_last_line)).fetchall()
+        result = db.execute(text(sql_query)).fetchall()
         # Convert result to a list of dictionaries
         result_dict = [dict(row._mapping) for row in result]
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Query execution failed: {str(e)}")
 
-    return {"sql_query": sql_query_last_line, "result": result_dict}
+    return {"sql_query": sql_query, "result": result_dict}
