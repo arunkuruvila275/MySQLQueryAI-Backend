@@ -1,0 +1,10 @@
+Metadata-Version: 2.1
+Name: mysqlqueryai-backend
+Version: 1.0.0
+Requires-Dist: fastapi
+Requires-Dist: sqlalchemy
+Requires-Dist: pydantic
+Requires-Dist: openai
+Requires-Dist: uvicorn
+Requires-Dist: pymysql
+Requires-Dist: setuptools
