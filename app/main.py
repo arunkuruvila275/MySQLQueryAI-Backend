@@ -35,6 +35,7 @@ class ConnectionDetails(BaseModel):
     password: str
     hostname: str
     database: str
+    enable_ssl: bool = False
 
 class QueryRequest(BaseModel):
     natural_language_query: str
@@ -51,7 +52,31 @@ class SqlExplainRequest(BaseModel):
 table_metadata = {}
 
 def get_db_url(connection_details: ConnectionDetails):
-    return f"mysql+pymysql://{connection_details.username}:{urllib.parse.quote_plus(connection_details.password)}@{connection_details.hostname}/{connection_details.database}"
+    db_url = f"mysql+pymysql://{connection_details.username}:{urllib.parse.quote_plus(connection_details.password)}@{connection_details.hostname}/{connection_details.database}"
+    ssl_args = {}
+    if connection_details.enable_ssl:
+        # Read SSL paths from environment variables
+        ssl_ca = os.getenv('SSL_CA')
+        ssl_cert = os.getenv('SSL_CERT')
+        ssl_key = os.getenv('SSL_KEY')
+        ssl_mode = "REQUIRED"
+
+        # Check if the SSL environment variables are set
+        if ssl_ca:
+            ssl_args = {
+                'ssl': {
+                    'ca': ssl_ca,
+                    'ssl_mode': ssl_mode,
+                    'check_hostname': False,
+                    'verify_mode': False
+                }
+            }
+            if ssl_cert and ssl_key:
+                ssl_args['ssl']['cert'] = ssl_cert
+                ssl_args['ssl']['key'] = ssl_key
+        else:
+            raise ValueError("SSL environment variables (SSL_CA, SSL_CERT, SSL_KEY) are not set correctly")
+    return db_url, ssl_args
 
 def fetch_table_metadata(db: Session):
     metadata = {}
@@ -73,8 +98,11 @@ def get_db_structure(engine):
 async def connect(connection_details: ConnectionDetails):
     try:
         # Test the database connection
-        db_url = get_db_url(connection_details)
-        engine = create_engine(db_url)
+        db_url, ssl_args = get_db_url(connection_details)
+        if ssl_args:
+            engine = create_engine(db_url, connect_args=ssl_args)
+        else:
+            engine = create_engine(db_url)
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
 
@@ -90,8 +118,11 @@ async def connect(connection_details: ConnectionDetails):
 async def update_model(connection_details: ConnectionDetails):
     try:
         # Create the database connection
-        db_url = get_db_url(connection_details)
-        engine = create_engine(db_url)
+        db_url, ssl_args = get_db_url(connection_details)
+        if ssl_args:
+            engine = create_engine(db_url, connect_args=ssl_args)
+        else:
+            engine = create_engine(db_url)
         get_db_structure(engine)
 
     except Exception as e:
@@ -139,8 +170,11 @@ async def execute_query(request: SqlExecuteRequest):
     logger.info("Received execute_query request")
 
     # Create the database connection
-    db_url = get_db_url(request.connection_details)
-    engine = create_engine(db_url)
+    db_url, ssl_args = get_db_url(request.connection_details)
+    if ssl_args:
+        engine = create_engine(db_url, connect_args=ssl_args)
+    else:
+        engine = create_engine(db_url)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     db = SessionLocal()
 
