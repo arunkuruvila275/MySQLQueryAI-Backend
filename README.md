@@ -7,6 +7,7 @@ MySQLQueryAI Backend is a FastAPI application that uses OpenAI's GPT-4-turbo mod
 
 - **Database Connection**: Connect to a MySQL database with provided credentials.
 - **Structure Fetching**: Retrieve and store the structure of all tables, including indexes.
+- **Relearn DB Schema**: Reinform OpenAI about the database structure.
 - **Natural Language Querying**: Convert natural language queries into efficient SQL queries using OpenAI API.
 - **Query Execution**: Execute generated SQL queries and return results.
 - **Query Explanation**: Explain SQL queries in natural language.
@@ -16,6 +17,7 @@ MySQLQueryAI Backend is a FastAPI application that uses OpenAI's GPT-4-turbo mod
 - Python 3.7+
 - MySQL database
 - OpenAI API key
+- SSL certificates(optional)
 
 ## Installation
 
@@ -39,20 +41,20 @@ MySQLQueryAI Backend is a FastAPI application that uses OpenAI's GPT-4-turbo mod
 4. Set up your environment variables. Create a `.env` file in the root of the project and add your OpenAI API key:
     ```sh
     OPENAI_API_KEY=your_openai_api_key
+    SSL_CA=path_to_your_ca_certificate
+    SSL_CERT=path_to_your_client_certificate
+    SSL_KEY=path_to_your_client_key
     ```
-
-## Configuration
-
-The configuration for the database connection is handled via environment variables. Ensure that the `.env` file contains the necessary configuration.
 
 ## Usage
 
-1. Start the FastAPI server:
+1. **Start the FastAPI server:**
     ```sh
     uvicorn app.main:app --reload
     ```
 
-2. The API will be available at `http://localhost:8000`.
+2. **The API will be available at:**
+   - `http://localhost:8000`.
 
 ## API Endpoints
 
@@ -66,13 +68,35 @@ The configuration for the database connection is handled via environment variabl
         "username": "your_db_username",
         "password": "your_db_password",
         "hostname": "your_db_hostname",
-        "database": "your_db_name"
+        "database": "your_db_name",
+        "enable_ssl": true
     }
     ```
 - **Response**:
     ```json
     {
         "message": "Connection successful"
+    }
+    ```
+
+### Retrain the Model with Database Structure
+
+- **Endpoint**: `/update_model/`
+- **Method**: `POST`
+- **Request Body**:
+    ```json
+    {
+        "username": "your_db_username",
+        "password": "your_db_password",
+        "hostname": "your_db_hostname",
+        "database": "your_db_name",
+        "enable_ssl": true
+    }
+    ```
+- **Response**:
+    ```json
+    {
+        "message": "Model updated successfully"
     }
     ```
 
@@ -88,7 +112,8 @@ The configuration for the database connection is handled via environment variabl
             "username": "your_db_username",
             "password": "your_db_password",
             "hostname": "your_db_hostname",
-            "database": "your_db_name"
+            "database": "your_db_name",
+            "enable_ssl": true
         }
     }
     ```
@@ -111,7 +136,8 @@ The configuration for the database connection is handled via environment variabl
             "username": "your_db_username",
             "password": "your_db_password",
             "hostname": "your_db_hostname",
-            "database": "your_db_name"
+            "database": "your_db_name",
+            "enable_ssl": true
         }
     }
     ```
@@ -146,18 +172,11 @@ mysqlqueryai-backend/
 │
 ├── app/
 │   ├── __init__.py
-│   ├── main.py             # Main FastAPI application
-│   ├── database.py         # Database connection and setup
-│   └── models.py           # SQLAlchemy models
-│
+│   └── main.py             # Main FastAPI application
 ├── .env                    # Environment variables
 ├── requirements.txt        # Python dependencies
 └── README.md               # Project documentation
 ```
-
-## License
-
-This project is licensed under the MIT License. See the LICENSE file for more details.
 
 ## Acknowledgments
 
