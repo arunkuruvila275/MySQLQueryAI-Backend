@@ -5,9 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy import create_engine, text
 import openai
-import os
-from .database import SessionLocal, engine, Base
-from .models import Base
+import os, urllib
 
 # Configure logging1
 logging.basicConfig(level=logging.INFO)
@@ -17,9 +15,6 @@ app = FastAPI()
 
 # Ensure the API key is set
 openai.api_key = os.getenv('OPENAI_API_KEY')
-
-# Initialize database
-Base.metadata.create_all(bind=engine)
 
 # Set up CORS
 origins = [
@@ -56,7 +51,7 @@ class SqlExplainRequest(BaseModel):
 table_metadata = {}
 
 def get_db_url(connection_details: ConnectionDetails):
-    return f"mysql+pymysql://{connection_details.username}:{connection_details.password}@{connection_details.hostname}/{connection_details.database}"
+    return f"mysql+pymysql://{connection_details.username}:{urllib.parse.quote_plus(connection_details.password)}@{connection_details.hostname}/{connection_details.database}"
 
 def fetch_table_metadata(db: Session):
     metadata = {}
@@ -65,6 +60,13 @@ def fetch_table_metadata(db: Session):
         create_table_query = db.execute(text(f"SHOW CREATE TABLE {table_name}")).fetchone()
         metadata[table_name] = create_table_query[1]  # Access the second element of the tuple
     return metadata
+
+def get_db_structure(engine):
+    # Fetch table metadata
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    db = SessionLocal()
+    global table_metadata
+    table_metadata = fetch_table_metadata(db)
 
 
 @app.post("/connect/")
@@ -76,16 +78,25 @@ async def connect(connection_details: ConnectionDetails):
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
 
-        # Fetch table metadata
-        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-        db = SessionLocal()
-        global table_metadata
-        table_metadata = fetch_table_metadata(db)
+        get_db_structure(engine)
 
         return {"message": "Connection successful"}
     except Exception as e:
         logger.error(f"Connection failed: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Connection failed: {str(e)}")
+
+
+@app.post("/update_model/")
+async def update_model(connection_details: ConnectionDetails):
+    try:
+        # Create the database connection
+        db_url = get_db_url(connection_details)
+        engine = create_engine(db_url)
+        get_db_structure(engine)
+
+    except Exception as e:
+        logger.error(f"Updating model failed: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Updating model failed: {str(e)}")
 
 
 @app.get("/")
@@ -122,6 +133,7 @@ async def translate_query(request: QueryRequest):
 
     return {"sql_query": sql_query}
 
+
 @app.post("/execute_query/")
 async def execute_query(request: SqlExecuteRequest):
     logger.info("Received execute_query request")
@@ -144,6 +156,7 @@ async def execute_query(request: SqlExecuteRequest):
         raise HTTPException(status_code=400, detail=f"Query execution failed: {str(e)}")
 
     return {"result": result_dict}
+
 
 @app.post("/explain_query/")
 async def explain_query(request: SqlExplainRequest):
