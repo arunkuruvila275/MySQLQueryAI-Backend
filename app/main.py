@@ -147,12 +147,28 @@ async def execute_query(request: SqlExecuteRequest):
     # Execute the provided SQL query
     sql_query = request.sql_query.strip()
     try:
-        result = db.execute(text(sql_query)).fetchall()
+        result = db.execute(text(sql_query))
+        if sql_query.lower().startswith(("insert", "update", "delete", "alter", "drop", "create")):
+            db.commit()  # Commit the transaction
 
-        # Convert result to a list of dictionaries
-        result_dict = [dict(row._mapping) for row in result]
+        # Try fetching results if there are any
+        try:
+            rows = result.fetchall()
+            if rows:
+                # Convert result to a list of dictionaries
+                result_dict = [dict(row._mapping) for row in rows]
+                logger.info(f"Query executed successfully, rows returned: {result_dict}")
+                return {"result": result_dict}
+            else:
+                logger.info("Query executed successfully, 0 rows returned")
+                return {"result": [], "message": "Query executed successfully, 0 rows returned."}
+        except Exception as fetch_exception:
+            logger.info("No rows to fetch, returning success message")
+            logger.error(f"Fetch exception: {fetch_exception}")
+            # No rows to fetch, return a success message for non-select queries
+            return {"result": [], "message": "Query executed successfully, no rows returned."}
     except Exception as e:
-        logger.error(f"Query execution failed: {str(e)}")
+        logger.error(f"Query execution failed: {str(e)}") 
         raise HTTPException(status_code=400, detail=f"Query execution failed: {str(e)}")
 
     return {"result": result_dict}
