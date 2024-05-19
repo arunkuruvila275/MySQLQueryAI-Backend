@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy import create_engine, text
 import openai
 import os, urllib
-import uvicorn
 
 # Configure logging1
 logging.basicConfig(level=logging.INFO)
@@ -233,9 +232,3 @@ async def explain_query(request: SqlExplainRequest):
     explanation = response.choices[0].message.content.strip()
 
     return {"explanation": explanation}
-
-def main():
-    uvicorn.run("app.main:app", reload=True)
-
-if __name__ == "__main__":
-    main()

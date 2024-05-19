@@ -1,2 +1,0 @@
-[console_scripts]
-mysqlqueryai-backend = app.main:main
