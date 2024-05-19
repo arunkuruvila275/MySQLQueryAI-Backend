@@ -54,7 +54,7 @@ MySQLQueryAI Backend is a FastAPI application that uses OpenAI's GPT-4-turbo mod
     ```
 
 2. **The API will be available at:**
-   - `http://localhost:8000`.
+    - http://localhost:8000
 
 ## API Endpoints
 
